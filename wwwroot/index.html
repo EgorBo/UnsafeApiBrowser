@@ -308,6 +308,10 @@ body {
     <input type="checkbox" id="showUnsafe" /> Show <code style="color:var(--peach)">unsafe</code> modifier members
   </label>
   <span class="legend-swatch swatch-orange"></span>
+  <span style="margin-left:16px"></span>
+  <label>
+    <input type="checkbox" id="highlightedOnly" /> Show only highlighted
+  </label>
 </div>
 
 <div class="tree-container" id="treeContainer">
@@ -336,6 +340,7 @@ let allNodes = [];
 let nodeIndex = {};
 let editMode = new URLSearchParams(location.search).has('edit');
 let showUnsafe = false;
+let highlightedOnly = false;
 let searchTerm = '';
 let debounceTimer = null;
 let totalCount = 0;
@@ -369,7 +374,7 @@ function renderTree() {
   container.innerHTML = '';
   visibleCount = 0;
   for (const node of allNodes) {
-    if (node._visible) {
+    if (node._visible && shouldShow(node)) {
       container.appendChild(createNodeEl(node));
     }
   }
@@ -470,7 +475,7 @@ function createNodeEl(node) {
 
     if (node._expanded && node.children) {
       for (const child of node.children) {
-        if (child._visible) {
+        if (child._visible && shouldShow(child)) {
           childDiv.appendChild(createNodeEl(child));
         }
       }
@@ -484,7 +489,7 @@ function createNodeEl(node) {
 
       if (node._expanded && childDiv.children.length === 0 && node.children) {
         for (const child of node.children) {
-          if (child._visible) {
+          if (child._visible && shouldShow(child)) {
             childDiv.appendChild(createNodeEl(child));
           }
         }
@@ -494,6 +499,19 @@ function createNodeEl(node) {
   }
 
   return div;
+}
+
+function shouldShow(node) {
+  if (!highlightedOnly) return true;
+  // Show if this node or any descendant is highlighted
+  return isHighlighted(node);
+}
+
+function isHighlighted(node) {
+  if (node.isMarked) return true;
+  if (showUnsafe && node.isUnsafe) return true;
+  if (!node.children) return false;
+  return node.children.some(c => isHighlighted(c));
 }
 
 function isNamespace(node) {
@@ -648,6 +666,11 @@ function updateStats() {
 // --- Show unsafe toggle ---
 document.getElementById('showUnsafe').addEventListener('change', (e) => {
   showUnsafe = e.target.checked;
+  renderTree();
+});
+
+document.getElementById('highlightedOnly').addEventListener('change', (e) => {
+  highlightedOnly = e.target.checked;
   renderTree();
 });
 
