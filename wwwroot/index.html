@@ -279,15 +279,30 @@ body {
 }
 .swatch-red { background: var(--marker-bg); border: 1px solid var(--red); }
 .swatch-orange { background: rgba(250, 179, 135, 0.35); border: 1px solid var(--peach); }
+.swatch-green { background: rgba(166, 227, 161, 0.30); border: 1px solid var(--green); }
+.node-row.pointer-member {
+  background: rgba(166, 227, 161, 0.30) !important;
+}
+.node-row.pointer-parent {
+  background: rgba(166, 227, 161, 0.10) !important;
+}
+/* Orange > green */
 .node-row.unsafe-member {
   background: rgba(250, 179, 135, 0.35) !important;
 }
 .node-row.unsafe-parent {
   background: rgba(250, 179, 135, 0.12) !important;
 }
-/* Red (marker) takes priority over orange (unsafe) */
+/* Red > orange > green */
 .node-row.marked { background: var(--marker-bg) !important; }
 .node-row.marked-parent { background: var(--marker-parent-bg) !important; }
+.pointer-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--green);
+  margin-left: 4px;
+  flex-shrink: 0;
+}
 </style>
 </head>
 <body>
@@ -308,6 +323,11 @@ body {
     <input type="checkbox" id="showUnsafe" /> Show <code style="color:var(--peach)">unsafe</code> modifier members
   </label>
   <span class="legend-swatch swatch-orange"></span>
+  <span style="margin-left:16px"></span>
+  <label>
+    <input type="checkbox" id="showPointers" /> Show APIs with T* types
+  </label>
+  <span class="legend-swatch swatch-green"></span>
   <span style="margin-left:16px"></span>
   <label>
     <input type="checkbox" id="highlightedOnly" /> Only any unsafe
@@ -341,6 +361,7 @@ let nodeIndex = {};
 const _params = new URLSearchParams(location.search);
 let editMode = _params.has('edit');
 let showUnsafe = _params.get('unsafe') !== '0';
+let showPointers = _params.get('ptrs') !== '0';
 let highlightedOnly = _params.get('only') !== '0';
 let searchTerm = '';
 let debounceTimer = null;
@@ -394,11 +415,13 @@ function createNodeEl(node) {
   const row = document.createElement('div');
   row.className = `node-row kind-${node.kind}`;
 
-  // Red (marked) has priority over orange (unsafe)
+  // Red > orange > green priority
   if (node.isMarked) row.classList.add('marked');
   else if (hasMarkedDescendant(node)) row.classList.add('marked-parent');
   else if (showUnsafe && node.isUnsafe) row.classList.add('unsafe-member');
   else if (showUnsafe && hasUnsafeDescendant(node)) row.classList.add('unsafe-parent');
+  else if (showPointers && node.hasPointers) row.classList.add('pointer-member');
+  else if (showPointers && hasPointerDescendant(node)) row.classList.add('pointer-parent');
 
   // Toggle arrow
   const toggle = document.createElement('span');
@@ -458,6 +481,15 @@ function createNodeEl(node) {
         row.appendChild(badge);
       }
     }
+    if (showPointers) {
+      const ptrCount = countPointerDescendants(node);
+      if (ptrCount > 0) {
+        const badge = document.createElement('span');
+        badge.className = 'pointer-count';
+        badge.textContent = `(${ptrCount})`;
+        row.appendChild(badge);
+      }
+    }
   }
 
   div.appendChild(row);
@@ -514,6 +546,7 @@ function shouldShow(node) {
 function isHighlighted(node) {
   if (node.isMarked) return true;
   if (showUnsafe && node.isUnsafe) return true;
+  if (showPointers && node.hasPointers) return true;
   if (!node.children) return false;
   return node.children.some(c => isHighlighted(c));
 }
@@ -550,6 +583,18 @@ function countUnsafeDescendants(node) {
   if (!node.children) return node.isUnsafe ? 1 : 0;
   let count = node.isUnsafe ? 1 : 0;
   for (const c of node.children) count += countUnsafeDescendants(c);
+  return count;
+}
+
+function hasPointerDescendant(node) {
+  if (!node.children) return false;
+  return node.children.some(c => c.hasPointers || hasPointerDescendant(c));
+}
+
+function countPointerDescendants(node) {
+  if (!node.children) return node.hasPointers ? 1 : 0;
+  let count = node.hasPointers ? 1 : 0;
+  for (const c of node.children) count += countPointerDescendants(c);
   return count;
 }
 
@@ -670,15 +715,23 @@ function updateStats() {
 function updateUrl() {
   const p = new URLSearchParams(location.search);
   showUnsafe ? p.delete('unsafe') : p.set('unsafe', '0');
+  showPointers ? p.delete('ptrs') : p.set('ptrs', '0');
   highlightedOnly ? p.delete('only') : p.set('only', '0');
   const qs = p.toString();
   history.replaceState(null, '', qs ? '?' + qs : location.pathname);
 }
 
-// --- Show unsafe toggle ---
+// --- Checkbox toggles ---
 document.getElementById('showUnsafe').checked = showUnsafe;
 document.getElementById('showUnsafe').addEventListener('change', (e) => {
   showUnsafe = e.target.checked;
+  updateUrl();
+  renderTree();
+});
+
+document.getElementById('showPointers').checked = showPointers;
+document.getElementById('showPointers').addEventListener('change', (e) => {
+  showPointers = e.target.checked;
   updateUrl();
   renderTree();
 });

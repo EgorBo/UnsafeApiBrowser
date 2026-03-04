@@ -34,6 +34,8 @@ public sealed class ApiNode
     public bool IsMarked { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IsUnsafe { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool HasPointers { get; set; }
     [JsonIgnore]
     public string? SourceFile { get; set; }
     [JsonIgnore]

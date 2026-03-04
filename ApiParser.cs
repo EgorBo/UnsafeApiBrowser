@@ -197,6 +197,7 @@ public static class ApiParser
             Kind = kind,
             IsMarked = isMarked,
             IsUnsafe = isUnsafe,
+            HasPointers = ContainsPointerType(member),
             SourceFile = file,
             SourceLine = line + 1,
             Children = [],
@@ -267,6 +268,7 @@ public static class ApiParser
                 Kind = mKind,
                 IsMarked = mMarked,
                 IsUnsafe = mUnsafe,
+                HasPointers = ContainsPointerType(m),
                 SourceFile = file,
                 SourceLine = mLine + 1,
             });
@@ -349,6 +351,17 @@ public static class ApiParser
         if (node.Children is null) return;
         foreach (var child in node.Children)
             PropagateUnsafe(child);
+    }
+
+    static bool ContainsPointerType(MemberDeclarationSyntax member)
+    {
+        // Check return type, parameter types, field type, property type for pointer/function pointer syntax
+        foreach (var descendant in member.DescendantNodes())
+        {
+            if (descendant is PointerTypeSyntax or FunctionPointerTypeSyntax)
+                return true;
+        }
+        return false;
     }
 
     /// <summary>
