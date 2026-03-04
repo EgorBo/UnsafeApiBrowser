@@ -24,27 +24,91 @@ public static class ApiParser
 
         Console.WriteLine($"Found {refFiles.Count} ref files to parse...");
 
-        // Parse all files and collect namespace-level nodes
-        var rootNamespaces = new Dictionary<string, ApiNode>(StringComparer.Ordinal);
-
-        foreach (var file in refFiles)
+        // Parse all files in parallel — each produces its own namespace dict
+        var perFileResults = new Dictionary<string, ApiNode>[refFiles.Count];
+        Parallel.For(0, refFiles.Count, i =>
         {
+            var file = refFiles[i];
             var source = File.ReadAllText(file);
-            var tree = CSharpSyntaxTree.ParseText(source, path: file);
+            var tree = CSharpSyntaxTree.ParseText(source, path: file,
+                options: CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Preview));
             var root = tree.GetCompilationUnitRoot();
             var lines = source.Split('\n');
 
+            var localNamespaces = new Dictionary<string, ApiNode>(StringComparer.Ordinal);
             foreach (var member in root.Members)
             {
                 if (member is BaseNamespaceDeclarationSyntax ns)
-                    ProcessNamespace(ns, file, lines, rootNamespaces);
+                    ProcessNamespace(ns, file, lines, localNamespaces);
             }
-        }
+            perFileResults[i] = localNamespaces;
+        });
+
+        // Merge results sequentially
+        var rootNamespaces = new Dictionary<string, ApiNode>(StringComparer.Ordinal);
+        foreach (var localNs in perFileResults)
+            MergeNamespaces(rootNamespaces, localNs);
 
         var result = NestNamespaces(rootNamespaces.Values.ToList());
         foreach (var ns in result)
             ns.SortChildren();
         return result;
+    }
+
+    static void MergeNamespaces(Dictionary<string, ApiNode> target, Dictionary<string, ApiNode> source)
+    {
+        foreach (var (name, srcNode) in source)
+        {
+            if (!target.TryGetValue(name, out var tgtNode))
+            {
+                target[name] = srcNode;
+                continue;
+            }
+            // Merge children
+            if (srcNode.Children is null) continue;
+            tgtNode.Children ??= [];
+            foreach (var child in srcNode.Children)
+            {
+                if (child.Kind == ApiNodeKind.Namespace)
+                {
+                    var existingNs = tgtNode.Children.FirstOrDefault(
+                        c => c.Kind == ApiNodeKind.Namespace && c.Name == child.Name);
+                    if (existingNs is not null)
+                    {
+                        var childDict = new Dictionary<string, ApiNode>(StringComparer.Ordinal) { [child.Name] = child };
+                        var tgtDict = new Dictionary<string, ApiNode>(StringComparer.Ordinal) { [existingNs.Name] = existingNs };
+                        MergeNamespaces(tgtDict, childDict);
+                    }
+                    else
+                    {
+                        tgtNode.Children.Add(child);
+                    }
+                }
+                else
+                {
+                    // Types: merge partial types
+                    var existing = tgtNode.Children.FirstOrDefault(c => c.Id == child.Id);
+                    if (existing is not null)
+                    {
+                        if (child.IsMarked) existing.IsMarked = true;
+                        if (child.IsUnsafe) existing.IsUnsafe = true;
+                        if (child.Children is not null)
+                        {
+                            existing.Children ??= [];
+                            foreach (var member in child.Children)
+                            {
+                                if (!existing.Children.Any(m => m.Id == member.Id))
+                                    existing.Children.Add(member);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        tgtNode.Children.Add(child);
+                    }
+                }
+            }
+        }
     }
 
     static void ProcessNamespace(

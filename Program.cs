@@ -30,18 +30,24 @@ foreach (var node in nodeIndex.Values)
     }
 }
 
-var builder = WebApplication.CreateBuilder(args[1..]);
-builder.Services.ConfigureHttpJsonOptions(o =>
+// Pre-serialize the tree JSON once for fast responses
+var jsonOptions = new JsonSerializerOptions
 {
-    o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-    o.SerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
-});
+    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+};
+var treeJson = JsonSerializer.Serialize(apiTree, jsonOptions);
+Console.WriteLine($"Tree JSON: {treeJson.Length / 1024}KB");
+
+var builder = WebApplication.CreateBuilder(args[1..]);
+builder.Services.AddResponseCompression();
 
 var app = builder.Build();
+app.UseResponseCompression();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.MapGet("/api/tree", () => apiTree);
+app.MapGet("/api/tree", () => Results.Text(treeJson, "application/json"));
 
 app.MapPost("/api/marker",async (HttpRequest request) =>
 {
@@ -55,6 +61,8 @@ app.MapPost("/api/marker",async (HttpRequest request) =>
     if (!MarkerService.ToggleMarker(node, body.Marked))
         return Results.BadRequest("Cannot modify marker (no source location)");
 
+    // Refresh cached tree JSON after marker change
+    treeJson = JsonSerializer.Serialize(apiTree, jsonOptions);
     return Results.Ok(new { node.Id, node.IsMarked });
 });
 
