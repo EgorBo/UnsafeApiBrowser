@@ -58,8 +58,9 @@ app.MapPost("/api/marker",async (HttpRequest request) =>
     return Results.Ok(new { node.Id, node.IsMarked });
 });
 
-Console.WriteLine("Starting server on http://localhost:5000");
-app.Run("http://localhost:5000");
+var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
+Console.WriteLine($"Starting server on http://localhost:{port}");
+app.Run($"http://localhost:{port}");
 return 0;
 
 record MarkerRequest(string NodeId, bool Marked);
