@@ -26,6 +26,7 @@ done
 CADDYFILE=$(mktemp)
 cat > "$CADDYFILE" <<EOF
 {
+    admin off
     http_port 0
     https_port 4000
 }
