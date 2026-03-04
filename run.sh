@@ -28,11 +28,11 @@ CADDYFILE=$(mktemp)
 cat > "$CADDYFILE" <<EOF
 {
     admin off
-    http_port 0
-    https_port $PUBLIC_PORT
+    auto_https off
 }
 
 bot.egorbo.com:$PUBLIC_PORT {
+    tls internal
     reverse_proxy localhost:$INTERNAL_PORT
 }
 EOF
