@@ -305,12 +305,12 @@ body {
   <span style="color:var(--subtext)">candidates for [RequiresUnsafe]</span>
   <span style="margin-left:16px"></span>
   <label>
-    <input type="checkbox" id="showUnsafe" checked /> Show <code style="color:var(--peach)">unsafe</code> modifier members
+    <input type="checkbox" id="showUnsafe" /> Show <code style="color:var(--peach)">unsafe</code> modifier members
   </label>
   <span class="legend-swatch swatch-orange"></span>
   <span style="margin-left:16px"></span>
   <label>
-    <input type="checkbox" id="highlightedOnly" checked /> Only any unsafe
+    <input type="checkbox" id="highlightedOnly" /> Only any unsafe
   </label>
 </div>
 
@@ -338,9 +338,10 @@ const IS_LEAF_KIND = new Set([
 
 let allNodes = [];
 let nodeIndex = {};
-let editMode = new URLSearchParams(location.search).has('edit');
-let showUnsafe = true;
-let highlightedOnly = true;
+const _params = new URLSearchParams(location.search);
+let editMode = _params.has('edit');
+let showUnsafe = _params.get('unsafe') !== '0';
+let highlightedOnly = _params.get('only') !== '0';
 let searchTerm = '';
 let debounceTimer = null;
 let totalCount = 0;
@@ -663,14 +664,26 @@ function updateStats() {
   }
 }
 
+function updateUrl() {
+  const p = new URLSearchParams(location.search);
+  showUnsafe ? p.delete('unsafe') : p.set('unsafe', '0');
+  highlightedOnly ? p.delete('only') : p.set('only', '0');
+  const qs = p.toString();
+  history.replaceState(null, '', qs ? '?' + qs : location.pathname);
+}
+
 // --- Show unsafe toggle ---
+document.getElementById('showUnsafe').checked = showUnsafe;
 document.getElementById('showUnsafe').addEventListener('change', (e) => {
   showUnsafe = e.target.checked;
+  updateUrl();
   renderTree();
 });
 
+document.getElementById('highlightedOnly').checked = highlightedOnly;
 document.getElementById('highlightedOnly').addEventListener('change', (e) => {
   highlightedOnly = e.target.checked;
+  updateUrl();
   renderTree();
 });
 
