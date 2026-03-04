@@ -8,17 +8,9 @@ export DOTNET_TieredCompilation=0
 
 echo "Starting Unsafe API Browser on port $PORT..."
 cd "$SCRIPT_DIR"
-PORT=$PORT dotnet run -c Release --project "$SCRIPT_DIR" -- "$RUNTIME_PATH" &
-APP_PID=$!
-
+nohup env PORT=$PORT dotnet run -c Release --project "$SCRIPT_DIR" -- "$RUNTIME_PATH" \
+    > "$SCRIPT_DIR/app.log" 2>&1 &
+echo $! > "$SCRIPT_DIR/app.pid"
+echo "PID: $(cat "$SCRIPT_DIR/app.pid")"
+echo "Logs: $SCRIPT_DIR/app.log"
 echo "Running at http://bot.egorbo.com:$PORT"
-echo "Press Ctrl+C to stop."
-
-cleanup() {
-    echo "Shutting down..."
-    kill $APP_PID 2>/dev/null || true
-    wait
-}
-trap cleanup EXIT INT TERM
-
-wait
