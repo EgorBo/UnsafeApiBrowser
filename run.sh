@@ -21,9 +21,21 @@ for i in $(seq 1 30); do
     sleep 1
 done
 
-# Start Caddy reverse proxy
-echo "Starting Caddy reverse proxy for bot.egorbo.com:4000 -> localhost:$PORT..."
-caddy reverse-proxy --from bot.egorbo.com:4000 --to localhost:$PORT &
+# Write a Caddyfile that only listens on port 4000 (no port 80 needed)
+CADDYFILE=$(mktemp)
+cat > "$CADDYFILE" <<EOF
+{
+    http_port 0
+    https_port 4000
+}
+
+bot.egorbo.com:4000 {
+    reverse_proxy localhost:$PORT
+}
+EOF
+
+echo "Starting Caddy on https://bot.egorbo.com:4000..."
+caddy run --config "$CADDYFILE" --adapter caddyfile &
 CADDY_PID=$!
 
 echo "Running at https://bot.egorbo.com:4000"
@@ -33,6 +45,7 @@ cleanup() {
     echo "Shutting down..."
     kill $APP_PID 2>/dev/null || true
     kill $CADDY_PID 2>/dev/null || true
+    rm -f "$CADDYFILE"
     wait
 }
 trap cleanup EXIT INT TERM
