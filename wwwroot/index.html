@@ -353,6 +353,9 @@ async function init() {
   buildIndex(allNodes);
   totalCount = Object.keys(nodeIndex).length;
 
+  // Expand top-level nodes on first load
+  for (const node of allNodes) node._expanded = true;
+
   document.getElementById('loading').style.display = 'none';
   document.getElementById('tree').style.display = '';
   renderTree();
