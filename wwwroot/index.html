@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unsafe API Browser — dotnet/runtime</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #1e1e2e;
+  --surface: #313244;
+  --text: #cdd6f4;
+  --subtext: #a6adc8;
+  --blue: #89b4fa;
+  --green: #a6e3a1;
+  --mauve: #cba6f7;
+  --red: #f38ba8;
+  --peach: #fab387;
+  --yellow: #f9e2af;
+  --teal: #94e2d5;
+  --overlay: #585b70;
+  --marker-bg: rgba(243, 139, 168, 0.45);
+  --marker-parent-bg: rgba(243, 139, 168, 0.18);
+  --search-bg: #45475a;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-size: 15px;
+}
+.header {
+  background: var(--surface);
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid var(--overlay);
+  flex-shrink: 0;
+}
+.header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+.search-box {
+  flex: 1;
+  max-width: 600px;
+  position: relative;
+}
+.search-box input {
+  width: 100%;
+  padding: 8px 14px 8px 36px;
+  background: var(--search-bg);
+  border: 1px solid var(--overlay);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 15px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.search-box input:focus {
+  border-color: var(--blue);
+}
+.search-box::before {
+  content: '🔍';
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  pointer-events: none;
+}
+.stats {
+  font-size: 13px;
+  color: var(--subtext);
+  white-space: nowrap;
+}
+.tree-container {
+  flex: 1;
+  overflow: auto;
+  padding: 8px 0;
+}
+.tree {
+  padding: 0 8px;
+}
+.node {
+  user-select: none;
+}
+.node-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  min-height: 26px;
+  transition: background-color 0.15s;
+}
+.node-row:hover {
+  background: var(--surface);
+}
+.node-row.marked {
+  background: var(--marker-bg) !important;
+}
+.node-row.marked-parent {
+  background: var(--marker-parent-bg) !important;
+}
+.toggle {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--subtext);
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+.toggle.expanded {
+  transform: rotate(90deg);
+}
+.toggle.leaf {
+  visibility: hidden;
+}
+.icon {
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+  width: 22px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  border-radius: 3px;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+}
+.kind-Namespace .icon { font-size: 14px; background: none; }
+.kind-Class .icon, .kind-Record .icon { background: #2d6a4f; color: #b7e4c7; }
+.kind-Struct .icon, .kind-RecordStruct .icon { background: #7b2d8b; color: #e0b0ff; }
+.kind-Interface .icon { background: #1d4e89; color: #a2d2ff; }
+.kind-Enum .icon { background: #b5651d; color: #ffe0b2; }
+.kind-Delegate .icon { background: #5c4d7d; color: #d4c5f9; }
+.kind-Method .icon { background: #4a4a4a; color: #ddd; }
+.kind-Property .icon { background: #4a4a4a; color: #ddd; }
+.kind-Field .icon { background: #4a4a4a; color: #ddd; }
+.kind-Event .icon { background: #4a4a4a; color: #ddd; }
+.kind-Constructor .icon { background: #4a4a4a; color: #ddd; }
+.kind-Operator .icon { background: #4a4a4a; color: #ddd; }
+.kind-Indexer .icon { background: #4a4a4a; color: #ddd; }
+.kind-EnumMember .icon { background: #4a4a4a; color: #ddd; }
+.name {
+  font-size: 14px;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.name:hover {
+  text-decoration: underline;
+}
+.kind-Namespace .name {
+  cursor: default;
+}
+.kind-Namespace .name:hover {
+  text-decoration: none;
+}
+.name .match {
+  background: rgba(249, 226, 175, 0.3);
+  color: var(--yellow);
+  border-radius: 2px;
+}
+.name .kw {
+  color: #569cd6;
+}
+.children {
+  padding-left: 20px;
+}
+.children.collapsed {
+  display: none;
+}
+.edit-checkbox {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--red);
+  cursor: pointer;
+}
+.marked-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: #d14;
+  margin-left: 6px;
+  flex-shrink: 0;
+}
+.unsafe-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--peach);
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 18px;
+  color: var(--subtext);
+}
+.loading .spinner {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--overlay);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-right: 12px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Kind-specific name colors */
+.kind-Namespace .name { color: var(--mauve); font-weight: 600; }
+.kind-Class .name, .kind-Struct .name, .kind-Interface .name,
+.kind-Enum .name, .kind-Delegate .name, .kind-Record .name,
+.kind-RecordStruct .name { color: var(--teal); }
+.kind-Method .name { color: var(--text); }
+.kind-Property .name { color: var(--text); }
+.kind-Field .name { color: var(--text); }
+.kind-Event .name { color: var(--text); }
+.kind-Constructor .name { color: var(--text); }
+.kind-Operator .name { color: var(--text); }
+.kind-Indexer .name { color: var(--text); }
+.kind-EnumMember .name { color: var(--text); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--overlay); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: var(--subtext); }
+
+/* Mode radio buttons */
+.mode-bar {
+  background: var(--surface);
+  padding: 6px 20px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  border-bottom: 1px solid var(--overlay);
+  flex-shrink: 0;
+  font-size: 13px;
+}
+.mode-bar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--subtext);
+}
+.mode-bar input[type="checkbox"] {
+  accent-color: var(--peach);
+}
+.legend-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+.swatch-red { background: var(--marker-bg); border: 1px solid var(--red); }
+.swatch-orange { background: rgba(250, 179, 135, 0.35); border: 1px solid var(--peach); }
+.node-row.unsafe-member {
+  background: rgba(250, 179, 135, 0.35) !important;
+}
+.node-row.unsafe-parent {
+  background: rgba(250, 179, 135, 0.12) !important;
+}
+/* Red (marker) takes priority over orange (unsafe) */
+.node-row.marked { background: var(--marker-bg) !important; }
+.node-row.marked-parent { background: var(--marker-parent-bg) !important; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>☢️ Unsafe API Browser</h1>
+  <div class="search-box">
+    <input type="text" id="search" placeholder="Search APIs... (e.g. List, Dictionary.TryGet, System.IO)" autocomplete="off" />
+  </div>
+  <div class="stats" id="stats"></div>
+</div>
+
+<div class="mode-bar">
+  <span class="legend-swatch swatch-red"></span>
+  <span style="color:var(--subtext)">candidates for [RequiresUnsafe]</span>
+  <span style="margin-left:16px"></span>
+  <label>
+    <input type="checkbox" id="showUnsafe" /> Show <code style="color:var(--peach)">unsafe</code> modifier members
+  </label>
+  <span class="legend-swatch swatch-orange"></span>
+</div>
+
+<div class="tree-container" id="treeContainer">
+  <div class="loading" id="loading">
+    <span class="spinner"></span>
+    Parsing public API surface...
+  </div>
+  <div class="tree" id="tree" style="display:none"></div>
+</div>
+
+<script>
+const ICONS = {
+  Namespace:   '📦', Class:      'C', Struct:      'S',
+  Interface:   'I', Enum:       'E', Delegate:    'D',
+  Record:      'R', RecordStruct:'RS', Method:     'M',
+  Property:    'P', Field:      'F', Event:       'Ev',
+  Constructor: '.c', Operator: 'Op', Indexer:   '[]',
+  EnumMember:  '=',
+};
+
+const IS_LEAF_KIND = new Set([
+  'Method','Property','Field','Event','Constructor','Operator','Indexer','EnumMember','Delegate'
+]);
+
+let allNodes = [];
+let nodeIndex = {};
+let editMode = new URLSearchParams(location.search).has('edit');
+let showUnsafe = false;
+let searchTerm = '';
+let debounceTimer = null;
+let totalCount = 0;
+let visibleCount = 0;
+
+async function init() {
+  const resp = await fetch('/api/tree');
+  allNodes = await resp.json();
+  buildIndex(allNodes);
+  totalCount = Object.keys(nodeIndex).length;
+
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('tree').style.display = '';
+  renderTree();
+  updateStats();
+}
+
+function buildIndex(nodes, parent) {
+  for (const n of nodes) {
+    nodeIndex[n.id] = n;
+    n._parent = parent || null;
+    n._expanded = false;
+    n._visible = true;
+    n._matchesSelf = false;
+    if (n.children) buildIndex(n.children, n);
+  }
+}
+
+function renderTree() {
+  const container = document.getElementById('tree');
+  container.innerHTML = '';
+  visibleCount = 0;
+  for (const node of allNodes) {
+    if (node._visible) {
+      container.appendChild(createNodeEl(node));
+    }
+  }
+  updateStats();
+}
+
+function createNodeEl(node) {
+  const div = document.createElement('div');
+  div.className = 'node';
+  div.dataset.id = node.id;
+
+  const isLeaf = !node.children || node.children.length === 0;
+  const row = document.createElement('div');
+  row.className = `node-row kind-${node.kind}`;
+
+  // Red (marked) has priority over orange (unsafe)
+  if (node.isMarked) row.classList.add('marked');
+  else if (hasMarkedDescendant(node)) row.classList.add('marked-parent');
+  else if (showUnsafe && node.isUnsafe) row.classList.add('unsafe-member');
+  else if (showUnsafe && hasUnsafeDescendant(node)) row.classList.add('unsafe-parent');
+
+  // Toggle arrow
+  const toggle = document.createElement('span');
+  toggle.className = 'toggle' + (isLeaf ? ' leaf' : '') + (node._expanded ? ' expanded' : '');
+  toggle.textContent = '▶';
+  row.appendChild(toggle);
+
+  // Edit checkbox
+  if (editMode && isMember(node)) {
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'edit-checkbox';
+    cb.checked = node.isMarked;
+    cb.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleMarker(node, cb.checked);
+    });
+    row.appendChild(cb);
+  }
+
+  // Icon
+  const icon = document.createElement('span');
+  icon.className = 'icon';
+  icon.textContent = ICONS[node.kind] || '•';
+  row.appendChild(icon);
+
+  // Name — show full signature for members, short name for types/namespaces
+  const name = document.createElement('span');
+  name.className = 'name';
+  const displayText = node.sig || node.name;
+  if (searchTerm && node._matchesSelf) {
+    let html = highlightMatch(displayText, searchTerm);
+    if (node.sig) html = highlightKeywords(html);
+    name.innerHTML = html;
+  } else if (node.sig) {
+    name.innerHTML = highlightKeywords(escapeHtml(displayText));
+  } else {
+    name.textContent = displayText;
+  }
+  row.appendChild(name);
+
+  // Show descendant counts for parent nodes
+  if (node.children && node.children.length > 0) {
+    const markedCount = countMarkedDescendants(node);
+    if (markedCount > 0) {
+      const badge = document.createElement('span');
+      badge.className = 'marked-count';
+      badge.textContent = `(${markedCount})`;
+      row.appendChild(badge);
+    }
+    if (showUnsafe) {
+      const unsafeCount = countUnsafeDescendants(node);
+      if (unsafeCount > 0) {
+        const badge = document.createElement('span');
+        badge.className = 'unsafe-count';
+        badge.textContent = `(${unsafeCount})`;
+        row.appendChild(badge);
+      }
+    }
+  }
+
+  div.appendChild(row);
+
+  // Double-click opens GitHub source
+  row.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    if (node.src) {
+      const url = `https://github.com/dotnet/runtime/blob/main/${node.src}#L${node.line}`;
+      window.open(url, '_blank');
+    }
+  });
+  visibleCount++;
+
+  // Children
+  if (!isLeaf) {
+    const childDiv = document.createElement('div');
+    childDiv.className = 'children' + (node._expanded ? '' : ' collapsed');
+
+    if (node._expanded && node.children) {
+      for (const child of node.children) {
+        if (child._visible) {
+          childDiv.appendChild(createNodeEl(child));
+        }
+      }
+    }
+    div.appendChild(childDiv);
+
+    row.addEventListener('click', () => {
+      node._expanded = !node._expanded;
+      toggle.classList.toggle('expanded', node._expanded);
+      childDiv.classList.toggle('collapsed', !node._expanded);
+
+      if (node._expanded && childDiv.children.length === 0 && node.children) {
+        for (const child of node.children) {
+          if (child._visible) {
+            childDiv.appendChild(createNodeEl(child));
+          }
+        }
+      }
+      updateStats();
+    });
+  }
+
+  return div;
+}
+
+function isNamespace(node) {
+  return node.kind === 'Namespace';
+}
+
+const MEMBER_KINDS = new Set([
+  'Method','Property','Field','Event','Constructor','Operator','Indexer','EnumMember'
+]);
+function isMember(node) {
+  return MEMBER_KINDS.has(node.kind);
+}
+
+function hasMarkedDescendant(node) {
+  if (!node.children) return false;
+  return node.children.some(c => c.isMarked || hasMarkedDescendant(c));
+}
+
+function countMarkedDescendants(node) {
+  if (!node.children) return node.isMarked ? 1 : 0;
+  let count = node.isMarked ? 1 : 0;
+  for (const c of node.children) count += countMarkedDescendants(c);
+  return count;
+}
+
+function hasUnsafeDescendant(node) {
+  if (!node.children) return false;
+  return node.children.some(c => c.isUnsafe || hasUnsafeDescendant(c));
+}
+
+function countUnsafeDescendants(node) {
+  if (!node.children) return node.isUnsafe ? 1 : 0;
+  let count = node.isUnsafe ? 1 : 0;
+  for (const c of node.children) count += countUnsafeDescendants(c);
+  return count;
+}
+
+function highlightMatch(text, term) {
+  const idx = text.toLowerCase().indexOf(term.toLowerCase());
+  if (idx === -1) return escapeHtml(text);
+  const before = text.substring(0, idx);
+  const match = text.substring(idx, idx + term.length);
+  const after = text.substring(idx + term.length);
+  return escapeHtml(before) + '<span class="match">' + escapeHtml(match) + '</span>' + escapeHtml(after);
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+const CS_KEYWORDS = new Set([
+  'abstract','as','async','await','base','bool','byte','char','checked','class',
+  'const','decimal','default','delegate','double','enum','event','explicit',
+  'extern','false','fixed','float','foreach','get','implicit','in','int',
+  'interface','internal','is','long','namespace','new','null','object','operator',
+  'out','override','params','partial','private','protected','readonly','record',
+  'ref','return','sbyte','sealed','set','short','static','string','struct',
+  'this','throw','true','uint','ulong','unchecked','unsafe','ushort','using',
+  'virtual','void','volatile','where','nint','nuint','scoped','required','file',
+]);
+
+function highlightKeywords(html) {
+  // Split on HTML tags to only process text segments
+  return html.replace(/([^<>]+)|(<[^>]+>)/g, (m, text, tag) => {
+    if (tag) return tag;
+    return text.replace(/\b([a-z][a-z0-9]*)\b/g, (w) =>
+      CS_KEYWORDS.has(w) ? `<span class="kw">${w}</span>` : w
+    );
+  });
+}
+
+// --- Search ---
+document.getElementById('search').addEventListener('input', (e) => {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    searchTerm = e.target.value.trim();
+    applyFilter();
+    renderTree();
+  }, 400);
+});
+
+function applyFilter() {
+  if (!searchTerm) {
+    resetVisibility(allNodes);
+    return;
+  }
+  const lower = searchTerm.toLowerCase();
+  for (const root of allNodes) {
+    markVisibility(root, lower);
+  }
+}
+
+function resetVisibility(nodes) {
+  for (const n of nodes) {
+    n._visible = true;
+    n._matchesSelf = false;
+    n._expanded = false;
+    if (n.children) resetVisibility(n.children);
+  }
+}
+
+function markVisibility(node, term) {
+  // Check if this node's name or full id matches
+  const nameMatch = node.name.toLowerCase().includes(term);
+  const idMatch = node.id.toLowerCase().includes(term);
+  const sigMatch = node.sig ? node.sig.toLowerCase().includes(term) : false;
+  node._matchesSelf = nameMatch || idMatch || sigMatch;
+
+  let anyChildVisible = false;
+  if (node.children) {
+    for (const child of node.children) {
+      if (markVisibility(child, term)) anyChildVisible = true;
+    }
+  }
+
+  node._visible = node._matchesSelf || anyChildVisible;
+  node._expanded = node._visible && (anyChildVisible || node._matchesSelf) && !!searchTerm;
+  return node._visible;
+}
+
+// --- Marker Toggle ---
+async function toggleMarker(node, marked) {
+  try {
+    const resp = await fetch('/api/marker', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nodeId: node.id, marked }),
+    });
+    if (resp.ok) {
+      node.isMarked = marked;
+      // Re-render to update highlighting
+      renderTree();
+    } else {
+      const err = await resp.text();
+      console.error('Failed to toggle marker:', err);
+      alert('Failed to toggle marker: ' + err);
+    }
+  } catch (e) {
+    console.error('Error toggling marker:', e);
+  }
+}
+
+function updateStats() {
+  const el = document.getElementById('stats');
+  if (searchTerm) {
+    el.textContent = `${visibleCount.toLocaleString()} / ${totalCount.toLocaleString()} nodes`;
+  } else {
+    el.textContent = `${totalCount.toLocaleString()} nodes`;
+  }
+}
+
+// --- Show unsafe toggle ---
+document.getElementById('showUnsafe').addEventListener('change', (e) => {
+  showUnsafe = e.target.checked;
+  renderTree();
+});
+
+init();
+</script>
+</body>
+</html>
