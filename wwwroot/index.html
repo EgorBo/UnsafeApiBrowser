@@ -305,12 +305,12 @@ body {
   <span style="color:var(--subtext)">candidates for [RequiresUnsafe]</span>
   <span style="margin-left:16px"></span>
   <label>
-    <input type="checkbox" id="showUnsafe" /> Show <code style="color:var(--peach)">unsafe</code> modifier members
+    <input type="checkbox" id="showUnsafe" checked /> Show <code style="color:var(--peach)">unsafe</code> modifier members
   </label>
   <span class="legend-swatch swatch-orange"></span>
   <span style="margin-left:16px"></span>
   <label>
-    <input type="checkbox" id="highlightedOnly" /> Show only highlighted
+    <input type="checkbox" id="highlightedOnly" checked /> Only any unsafe
   </label>
 </div>
 
@@ -339,8 +339,8 @@ const IS_LEAF_KIND = new Set([
 let allNodes = [];
 let nodeIndex = {};
 let editMode = new URLSearchParams(location.search).has('edit');
-let showUnsafe = false;
-let highlightedOnly = false;
+let showUnsafe = true;
+let highlightedOnly = true;
 let searchTerm = '';
 let debounceTimer = null;
 let totalCount = 0;
